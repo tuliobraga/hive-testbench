@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use File::Basename;
+use POSIX qw(strftime);
 
 # PROTOTYPES
 sub dieWithUsage(;$);
@@ -13,8 +14,11 @@ my $SCRIPT_PATH = dirname( __FILE__ );
 
 # MAIN
 dieWithUsage("one or more parameters not defined") unless @ARGV >= 1;
-my $suite = shift;
-my $scale = shift || 2;
+my $suite = shift; # suite tpcds or tpch
+my $scale = shift || 2; # data scale factor
+my $iter = shift || 1; # number of executions of each query
+my $interval = shift || 0; #interval between each query
+my $queryName = shift || "*"; #query name ex.: query12
 dieWithUsage("suite name required") unless $suite eq "tpcds" or $suite eq "tpch";
 
 chdir $SCRIPT_PATH;
@@ -23,37 +27,73 @@ if( $suite eq 'tpcds' ) {
 } else {
 	chdir 'sample-queries-tpch';
 } # end if
-my @queries = glob '*.sql';
+my @queries = glob "$queryName.sql";
 
 my $db = { 
 	'tpcds' => "tpcds_bin_partitioned_orc_$scale",
 	'tpch' => "tpch_flat_orc_$scale"
 };
 
-print "filename,status,time,rows\n";
+print "filename,status,start,end,time(s),avgtime(s),timeTaken(s),avgTimeTaken(s),standardDeviation\n";
+$| = 1;
 for my $query ( @queries ) {
-	my $logname = "$query.log";
-	my $cmd="echo 'use $db->{${suite}}; source $query;' | hive -i testbench.settings 2>&1  | tee $query.log";
-#	my $cmd="cat $query.log";
-	#print $cmd ; exit;
-	
+	# declaring aux variables
+	my $sumSquareTimeTaken = 0;
+	my $sumTimeTaken = 0;
+	my $variance = 0;
+	my $standardDeviation = 0;
+	my $rows = 0;
+
+	# getting start datetime
+	my $hiveStartDate = strftime "%F %H:%M:%S", localtime;
 	my $hiveStart = time();
 
-	my @hiveoutput=`$cmd`;
-	die "${SCRIPT_NAME}:: ERROR:  hive command unexpectedly exited \$? = '$?', \$! = '$!'" if $?;
+	for (my $i=0; $i < $iter; $i++) {
+		my $logname = "$query.tez.$i.log";
+		my $cmd="echo 'use $db->{${suite}}; source $query;' | hive -i testbench.settings 2>&1  | tee logs/$logname";
+		my @hiveoutput=`$cmd`;
+		die "${SCRIPT_NAME}:: ERROR:  hive command unexpectedly exited \$? = '$?', \$! = '$!'" if $?;
+
+		# Time taken running the query based on log
+		my $timeTaken = 0;
+		my $avgTimeTaken = 0;
+
+		my $repetitionNumber = 0;
+		foreach my $line ( @hiveoutput ) {
+			if( $line =~ /^Time taken:\s+([\d\.]+)\s+seconds/ ) {
+
+				$timeTaken += $1;
+
+			} elsif( $line =~ /^FAILED: / ) {
+				my $hiveFail = time();
+				my $hiveFailTime = $hiveFail - $hiveStart;
+				print "$query,failed,$hiveFailTime\n"; 
+			} # end if
+		} # end while
+
+		$sumSquareTimeTaken += $timeTaken*$timeTaken;
+		$sumTimeTaken += $timeTaken;
+	}
 
 	my $hiveEnd = time();
 	my $hiveTime = $hiveEnd - $hiveStart;
-	foreach my $line ( @hiveoutput ) {
-		if( $line =~ /Time taken:\s+([\d\.]+)\s+seconds,\s+Fetched:\s+(\d+)\s+row/ ) {
-			print "$query,success,$hiveTime,$2\n"; 
-		} elsif( 
-			$line =~ /^FAILED: /
-			# || /Task failed!/ 
-			) {
-			print "$query,failed,$hiveTime\n"; 
-		} # end if
-	} # end while
+
+	# getting start datetime
+	my $hiveEndDate = strftime "%F %H:%M:%S", localtime;
+
+	# calculating time average considering number of repetitions
+	my $hiveAvgTime = $hiveTime/$iter;
+
+	if ($iter > 1) {
+		$variance = ($sumSquareTimeTaken - ($sumTimeTaken*$sumTimeTaken)/$iter)/($iter-1);
+		$standardDeviation = sqrt($variance);
+	}
+
+	my $avgTimeTaken = $sumTimeTaken/$iter;
+
+	print "$query,success,$hiveStartDate,$hiveEndDate,$hiveTime,$hiveAvgTime,$sumTimeTaken,$avgTimeTaken,$standardDeviation\n"; 
+
+	sleep($interval);
 } # end for
 
 
@@ -73,4 +113,3 @@ Description:
 USAGE
 	exit 1;
 }
-
