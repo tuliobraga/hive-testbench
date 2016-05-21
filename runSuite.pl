@@ -18,6 +18,7 @@ my $suite = shift; # suite tpcds or tpch
 my $scale = shift || 2; # data scale factor
 my $iter = shift || 1; # number of executions of each query
 my $interval = shift || 0; #interval between each query
+my $engine = shift || 'mr'; #interval between each query
 my $queryName = shift || "*"; #query name ex.: query12
 dieWithUsage("suite name required") unless $suite eq "tpcds" or $suite eq "tpch";
 
@@ -33,6 +34,8 @@ my $db = {
 	'tpcds' => "tpcds_bin_partitioned_orc_$scale",
 	'tpch' => "tpch_flat_orc_$scale"
 };
+
+my $settings = "testbench-$engine.settings";
 
 print "filename,status,start,end,time(s),avgtime(s),timeTaken(s),avgTimeTaken(s),standardDeviation\n";
 $| = 1;
@@ -50,7 +53,7 @@ for my $query ( @queries ) {
 
 	for (my $i=0; $i < $iter; $i++) {
 		my $logname = "$query.tez.$i.log";
-		my $cmd="echo 'use $db->{${suite}}; source $query;' | hive -i testbench.settings 2>&1  | tee logs/$logname";
+		my $cmd="echo 'use $db->{${suite}}; source $query;' | hive -i $settings 2>&1  | tee logs/$logname";
 		my @hiveoutput=`$cmd`;
 		die "${SCRIPT_NAME}:: ERROR:  hive command unexpectedly exited \$? = '$?', \$! = '$!'" if $?;
 
