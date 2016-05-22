@@ -55,3 +55,20 @@ set hive.exec.dynamic.partition.mode=nonstrict;
 set hive.exec.reducers.bytes.per.reducer=100000000;
 set hive.txn.manager=org.apache.hadoop.hive.ql.lockmgr.DummyTxnManager;
 set hive.support.concurrency=false;
+
+-- tunning
+set hive.merge.mapfiles=true;
+set hive.merge.sparkfiles=false;
+set hive.merge.smallfiles.avgsize=16000000;
+set hive.merge.size.per.task=256000000;
+set hive.merge.orcfile.stripe.level=true;
+set hive.map.aggr.hash.percentmemory=0.5;
+set hive.optimize.sort.dynamic.partition=false;
+set hive.vectorized.execution.reduce.enabled=false;
+set hive.smbjoin.cache.rows=10000;
+set hive.exec.orc.default.stripe.size=67108864;
+set hive.fetch.task.conversion=more;
+set hive.fetch.task.conversion.threshold=1073741824;
+set hive.fetch.task.aggr=false;
+set mapreduce.input.fileinputformat.list-status.num-threads=5;
+set spark.kryo.referenceTracking=false;

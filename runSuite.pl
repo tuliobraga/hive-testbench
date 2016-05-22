@@ -52,7 +52,7 @@ for my $query ( @queries ) {
 	my $hiveStart = time();
 
 	for (my $i=0; $i < $iter; $i++) {
-		my $logname = "$query.tez.$i.log";
+		my $logname = "$query.$engine.$i.log";
 		my $cmd="echo 'use $db->{${suite}}; source $query;' | hive -i $settings 2>&1  | tee logs/$logname";
 		my @hiveoutput=`$cmd`;
 		die "${SCRIPT_NAME}:: ERROR:  hive command unexpectedly exited \$? = '$?', \$! = '$!'" if $?;
